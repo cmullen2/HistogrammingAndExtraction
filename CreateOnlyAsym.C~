@@ -1,0 +1,106 @@
+void CreateOnlyAsym() {
+		
+    TFile *infile = TFile::Open("/w/work1/home/chris/TestingFinalNoPol.root");
+
+    TFile *outfile =new TFile("/w/work1/home/chris/AsymsProtonChannelv2.root","recreate");
+    string dirs[3] = {"BG","Sig", "Cut1"};
+    vector<TString> histNames;
+    vector<TString> phihistNames;
+    bool storeHistNames = true;
+		
+    // all histograms for each bin
+    for (int i=0; i<3; i++) {
+					
+      TDirectory *weightsDir = infile->GetDirectory(dirs[i].c_str());	//WeightsDir is top lev folder
+      TIter	nextTbinDir(weightsDir->GetListOfKeys());
+      TKey 	*tbinKey;
+			
+      while ((tbinKey=(TKey*)nextTbinDir())) {
+			
+	TDirectory *tbinDir = weightsDir->GetDirectory(tbinKey->GetName()); //tbinDir is my W var.
+	TIter	nextEbinDir(tbinDir->GetListOfKeys());
+	TKey 	*ebinKey;
+				
+	while ((ebinKey=(TKey*)nextEbinDir())) {
+					
+	  TDirectory *ebinDir = tbinDir->GetDirectory(ebinKey->GetName()); //ebinDir is my costh
+	  TIter nextPolbinDir(ebinDir->GetListOfKeys());
+	  TKey  *polbinKey;
+
+	  while ((polbinKey=(TKey*)nextPolbinDir())){   //Looping round my polarisation states - +
+
+	    TDirectory *polbinDir = ebinDir->GetDirectory(polbinKey->GetName());
+	    TIter	nextHist(polbinDir->GetListOfKeys());
+	    TKey	*histKey;
+	   // TString heading = dirs[i]+" "+(TString)tbinDir->GetName()+" "+(TString)ebinDir->GetName()+" " + (TString)polbinDir->GetName();
+					
+	    int histNum = 0;
+	    while ((histKey=(TKey*)nextHist())) {
+									
+	      histNum++;
+	      TString IsPhi = (TString)histKey->GetName();
+	      TString IsPolPos = (TString)polbinDir->GetName();
+
+	      if(IsPhi=="Phi" && IsPolPos=="PolStateD-0.50_"){
+		TString PolPosName ="/" + dirs[i]+"/" + (TString)tbinDir->GetName()+ "/"  +  (TString)ebinDir->GetName() + "/PolStateD0.50_/Phi";
+		TString PolarPosName ="/" + dirs[i]+"/" + (TString)tbinDir->GetName()+ "/"  +  (TString)ebinDir->GetName() + "/PolStateD0.50_/Polarisation";
+		TString PolarNegName ="/" + dirs[i]+"/" + (TString)tbinDir->GetName()+ "/"  +  (TString)ebinDir->GetName() + "/PolStateD-0.50_/Polarisation";
+		TH1F* PolarPos = (TH1F*)infile->Get(PolarPosName);
+		TH1F* PolarNeg = (TH1F*)infile->Get(PolarNegName);
+		TH1F* PolPos = (TH1F*)infile->Get(PolPosName);
+		TH1F* hist = (TH1F*) histKey->ReadObj();
+		//Give Asym a proper name and heading
+		TH1* Asym = hist->GetAsymmetry(PolPos);
+		TF1* fit=new TF1("cos2phi","[0]+[1]*cos(TMath::DegToRad()*(2*x+[2]))",-180,180);
+		//fit->SetParLimits(2,80,100);
+		Asym->Fit("cos2phi");
+		//Asym->Draw(); 
+		Double_t MeanPolPos =  PolarPos->GetMean();
+		Double_t MeanPolNeg =  PolarNeg->GetMean();
+		Double_t AvePol = (MeanPolPos + MeanPolNeg)/2;
+		Double_t Par1 = fit->GetParameter(1) ;
+		Double_t Sigma = Par1/AvePol;  //Need a histo for each W var. or store in an array and use a separate function to plot the sigma plots so that I can change the binning without rerunning selector.
+		Asym->Write();
+		hist->Write();
+		PolPos->Write();
+		PolarPos->Write();
+		PolarNeg->Write();
+	      } //Closing if 
+	    }  //Closing while hist key		
+	  }   //Closing while nextPolbin
+	}    //Closing while nextEbindir costh
+      }     //Closing while nextTbindir W
+    }  //Closing For loop
+   //Can Make the function for drawing tgraph for sigma here and add simons code for adding sigma theory curves too.
+} //closing main function
+	
+
+void MakeSigmaGraph(double *sigma, double *error, double *plotVar, double *plotVarError, Int_t numBins, TString hTitle ){
+
+//Use this function to plot the sigma variable wrt energy or costh. First do sigma on y and costh on x for an energy bin, then energy on x for a costh bin.
+//Make an array for all sigma for each bin variable. Also make an array which stores the energy and ones that stores the costh for each of these.
+//
+//   W loop
+//	Costh loop
+//		sigma formed(Pol loop too but ignore)
+//	so for each new W could call MakeSigmaGraph, then clear the vector. Plot it with the W range on it, can pass as a param via tbinkey->GetName
+//
+//
+//  To be able to do the opposite we need to store all sigma values in a vector that isn't cleared until the end of dobins
+//  Then can call after all W have looped a separate function or just split the vector into other vectors using a small for loop and pass these to the function 
+//  Would need counters for the number of bins for each method. For the first method using the W as each plot need it for each call of the makesigma function.
+//  For the second method need it to allow the splitting of the vectors correctly and to pass to the plotting function
+//
+// First get it working for method one!
+
+TGraph* SigmaPlot = new TGraphErrors(numBins,plotVar,sigma,plotVarError,error); 
+//TGraph* SigmaPlotCosth = new TGraphErrors(NumBins,costh,sigma,costherror,error); 
+
+SigmaPlot->SetTitle(hTitle);
+SigmaPlot->Write();
+
+
+}
+
+
+
